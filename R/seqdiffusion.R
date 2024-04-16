@@ -1,37 +1,40 @@
 #' Enables fitting various sequential diffusion curves.
 #' 
-#' This function fits diffusion curves of the type \code{"bass"}, 
-#' \code{"gompertz"} or \code{gsgompertz} across generations. Parameters are 
-#' estimated for each generation individually by minimising the Mean Squared 
-#' Error with the subplex algorithm from the nloptr package. Optionally p-values
-#' of the coefficients can be determined via bootstraping. Furthermore, the
-#' bootstrapping allows to remove insignificant parameters from the optimisation
-#' process.
+#' This function fits diffusion curves of the type \code{"bass"},
+#' \code{"gompertz"}, \code{gsgompertz} or \code{weibull} across generations.
+#' Parameters are estimated for each generation individually by minimizing the
+#' Mean Squared Error with subplex algorithms from the optimx package.
+#' Optionally p-values of the coefficients can be determined via bootstraping.
+#' Furthermore, the bootstrapping allows removing insignificant parameters from
+#' the optimisation process.
 #' 
 #' @inheritSection diffusion Bass curve
 #' @inheritSection diffusion Gompertz curve
 #' @inheritSection diffusion Gamma/Shifted Gompertz
+#' @inheritSection diffusion Weibull
 #' 
-#' @param x matrix containing in each column the adoption per period for generation k
-#' @param w vector of curve parameters (see note). If provided no estimation
-#'   is done.
+#' @param y matrix containing in each column the adoption per period for generation k
+#' @param w matrix containing in each column the curve parameters for generation k (see note). Parameters set to NA will be
+#'   optimised. If \code{w = NULL} (default) all parameters are optimized.
 #' @param cleanlead removes leading zeros for fitting purposes (default == T)
-#' @param prew the \code{w} of the previous generation. This is used for
-#'   sequential fitting.
-#' @param l the l-norm (1 is absolute errors, 2 is squared errors)
-#' @param cumulative If TRUE optimisation is done on cumulative adoption.
+#' @param loss the l-norm (1 is absolute errors, 2 is squared errors)
+#' @param cumulative If TRUE optimization is done on cumulative adoption.
 #' @param pvalreps bootstrap repetitions to estimate (marginal) p-values
 #' @param eliminate if TRUE eliminates insignificant parameters from the
 #'   estimation. Forces \code{pvalreps = 1000} if left to 0.
 #' @param sig significance level used to eliminate parameters
 #' @param verbose if TRUE console output is provided during estimation (default
 #'   == F)
-#' @param type of diffusion curve to use. This can be "bass", "gompertz" and
-#'   "gsgompertz"
-#' @param optim optimization method to use. This can be "nm" for Nelder-Meade or
-#'   "hj" for Hooke-Jeeves. #' @param maxiter number of iterations the optimser
+#' @param type of diffusion curve to use. This can be "bass", "gompertz",
+#'   "gsgompertz" and "weibull"
+#' @param method optimization method to use. This can be "nm" for Nelder-Meade or
+#'   "hj" for Hooke-Jeeves. #' @param maxiter number of iterations the optimiser
 #'   takes (default == \code{10000} for "nm" and \code{Inf} for "hj")
 #' @param opttol Tolerance for convergence (default == 1.e-06)
+#' @param multisol when \code{"TRUE"} multiple optmisation solutions from different initialisations of the market parameter are used (default == \code{"FALSE"})
+#' @param initpar vector of initalisation parameters. If set to \code{preset} a predfined set of internal initalisation parameters is used while \code{"linearize"} uses linearised initalisation methods (default == \code{"linearize"}.
+#' @param mscal scales market potential at initalisation with the maximum of the observed market potential for better optimization results (default == \code{TRUE})
+#' 
 #' 
 #' @return Returns an object of class \code{seqdiffusion}, which contains:
 #' \itemize{
@@ -40,25 +43,12 @@
 #' \code{\link{diffusion}} for details)
 #' \item \code{call} calls function fitted
 #' \item \code{w} named matrix of fitted parameters for each generation
-#' \item \code{x} matrix of actuals
+#' \item \code{y} matrix of actuals
 #' \item \code{mse} insample Mean Squared Error for each generation
 #' \item \code{pval} all p-values for \code{w} at each generation
 #' }
 #' 
-#' @note vector \code{w} needs to be provided for the Bass curve in the order of
-#'   \code{"p", "q", "m"}, where "p" is the coefficient of innovation, "q" is the
-#'   coeficient of imitation and "m" is the market size coefficient.
-#'   
-#'   For the Gompertz curve vector \code{w} needs to be in the form of
-#'   \code{("a", "b", "m")}. Where "a" is the x-axis displacement coefficient, "b"
-#'   determines the growth rate and "m" sets, similarly to Bass model, the
-#'   market potential (saturation point).
-#'   
-#'   For the Shifted-Gompertz curve vector \code{w} needs to be in the form of 
-#'   \code{("a", "b", "c", "m")}. Where "a" is the x-axis displacement
-#'   coefficient, "b" determines the growth rate, "c" is the shifting parameter
-#'   and "m" sets, similarly to Bass model, the market potential (saturation
-#'   point).
+# #' @inherit diffusion note
 #'   
 #' @examples 
 #'   fit <- seqdiffusion(tsIbm)
@@ -69,58 +59,114 @@
 #' @seealso \code{\link{plot.seqdiffusion}} and \code{\link{print.seqdiffusion}}.   
 #'   
 #' @author Oliver Schaer, \email{info@@oliverschaer.ch}, 
-#' @author Nikoloas Kourentzes, \email{nikoloas@@kourentzes.com}
+#' @author Nikolaos Kourentzes, \email{nikolaos@@kourentzes.com}
 #' 
 #' @keywords internal
 #' 
+#' @importFrom stats is.mts
 #' @rdname seqdiffusion  
 #' @export seqdiffusion
-seqdiffusion <- function(x, cleanlead = c(TRUE, FALSE), prew = NULL, l = 2,
+seqdiffusion <- function(y, w = NULL, cleanlead = c(TRUE, FALSE), loss = 2,
                          cumulative = c(TRUE, FALSE),
                          pvalreps = 0, eliminate = c(FALSE, TRUE), sig = 0.05, 
                          verbose = c(FALSE, TRUE),
-                         type = c("bass", "gompertz", "gsgompertz"),
-                         optim = c("nm", "hj"), maxiter = Inf, opttol = 1.e-06){
+                         type = c("bass", "gompertz", "gsgompertz", "weibull"),
+                         method = c("L-BFGS-B", "Nelder-Mead", "BFGS", "hjkb", "Rcgmin", "bobyqa"),
+                         maxiter = 500, opttol = 1.e-06, multisol = c(FALSE, TRUE),
+                         initpar = c("linearize", "preset"), mscal = c(TRUE, FALSE),
+                         bootloss = c("smthempir", "empir", "se"), ...) {
   
-  type <- match.arg(type, c("bass", "gompertz", "gsgompertz"))
-  optim <- match.arg(optim, c("nm", "hj"))
-  verbose <- verbose[1]
-  eliminate <- eliminate[1]
+  type <- match.arg(type[1], c("bass", "gompertz", "gsgompertz", "weibull"))
+  method <- match.arg(method[1], c("L-BFGS-B", "Nelder-Mead", "BFGS", "hjkb", "Rcgmin", "bobyqa", "nm", "hj"))
+  if (!is.numeric(initpar)){
+    initpar <- match.arg(initpar[1], c("preset", "linearize", "linearise"))
+  }
+  bootloss <- match.arg(bootloss[1], c("smthempir", "empir", "se"))
+  
+  # check deprecated arguments doesn't work somehow
+  el <- list(...)
+  nel <- names(el)
+  if ("l" %in% nel) {
+    warning("Argument \"l\" has been deprecated and replaced by \"loss\"")
+    loss <- el$l
+  }
+  if ("x" %in% nel) {
+    warning("Argument \"x\" has been deprecated and replaced by \"y\"")
+    y <- el$x
+  }
+  if ("optim" %in% nel) {
+    warning("Argument \"optim\" has been deprecated and replaced by \"method\"")
+    method <- el$optim
+  }
+  
+  # Check bootstrap repetitions (pvalreps)
+  if (pvalreps < 0 | !is.numeric(pvalreps)) {
+    stop('Argument "pvalreps" must be a positive number.')
+  }
+  
+  # check the healthiness of y
+  if (!is.matrix(y) && !is.mts(y) && !is.data.frame(y)) {
+    stop('Argument "y" needs to be a matrix or mts-object')
+  }
+  
+  multisol <- multisol[1]
   cumulative <- cumulative[1]
-  
+  eliminate <- eliminate[1]
+  verbose <- verbose[1]
+  cleanlead <- cleanlead[1] # note dependency in seqdiffusion plot
+  mscal <- mscal[1]
+
   # Number of curves
-  k <- dim(x)[2]
+  k <- dim(y)[2]
+  
+  # handle fixed parameters
+  if (!is.null(w)) {
+    if (ncol(w) != k) {
+      stop('No of columns in argument "w" do not match numbers of generations')  
+    }
+  }
   
   fit <- vector("list", k)
   names(fit) <- paste0("Gen", 1:k)
   
   # Fit iteratively across generations
-  for (i in 1:k){
+  for (i in 1:k) {
     
-    if (verbose == TRUE){
+    if (verbose == TRUE) {
       writeLines(paste0("Generation ", i))
     }
-    if (i > 1){
+    if (i > 1) {
       prew <- fit[[i-1]]$w
       elimin <- eliminate
+      pvalr <- pvalreps
     } else {
       elimin <- FALSE
+      pvalr <- 0
+      prew <- NULL
     }
     
-    fit[[i]] <- diffusion(x[, i], w = NULL, cleanlead, prew, l, cumulative, pvalreps, 
-                          elimin, sig, verbose, type = type, optim = optim,
-                          maxiter, opttol)
+    if (is.null(w)) {
+      wGen <- NULL
+    } else {
+      wGen <- w[, i, drop = T]
+    }
     
+    fit[[i]] <- diffusion(y[, i], w = wGen, cleanlead, loss, cumulative,
+                          verbose, type, method, maxiter,
+                          opttol, multisol, initpar, mscal, 
+                          pvalreps = pvalr, eliminate = elimin, sig = sig,
+                          prew = prew, bootloss = bootloss)
+  
   }
   
   allw <- do.call(rbind, lapply(fit, function(x) {x$w}))
   allmse <- do.call(rbind, lapply(fit, function(x) {x$mse}))
   allpval <- do.call(rbind, lapply(fit, function(x) {x$pval}))
   
-  typ <- paste("Sequential", fit[[1]]$type)
+  type <- paste("Sequential", fit[[1]]$type)
   
-  return(structure(list("type" = typ, "diffusion" = fit, "x" = x, "w" = allw,
-                        "mse" = allmse, "pval" = allpval), 
+  return(structure(list("type" = type, "call" = sys.call(), "diffusion" = fit,
+                        "y" = y, "w" = allw, "mse" = allmse, "pval" = allpval), 
                    class = "seqdiffusion"))
 }
 
@@ -133,7 +179,7 @@ seqdiffusion <- function(x, cleanlead = c(TRUE, FALSE), prew = NULL, l = 2,
 #'
 #' @return None. Console output only. 
 #' @author Oliver Schaer, \email{info@@oliverschaer.ch}, 
-#' @author Nikoloas Kourentzes, \email{nikoloas@@kourentzes.com}
+#' @author Nikolaos Kourentzes, \email{nikolaos@@kourentzes.com}
 #' @seealso \code{\link{seqdiffusion}}.
 #' @keywords internal
 #' @examples
@@ -149,38 +195,34 @@ print.seqdiffusion <- function(x,...){
   type <- tolower(x$diffusion[[1]]$type)
   
   # create selector of paramters and p-values
-  no.w <- ncol(x$w)
+  noW <- numberParameters(type)
   sel <- NULL
-  for (i in 1:no.w){
-    sel <- c(sel, c(i, (i+no.w)))
+  for (i in 1:noW){
+    sel <- c(sel, c(i, (i+noW)))
   }
   
   writeLines(paste(x$type, "model"))
   writeLines("")
   writeLines("Parameters:")
   temp <- round(cbind(cbind(x$w, x$pval)[, sel],
-                      sqrt(x$mse)),
-                      4)
+                      sqrt(x$mse)), 4)
   
   switch(type,
-         bass = colnames(temp) <- c("p coef.", "pval.", "q coef.", "pval.",
-                                    "M size", "pval.", "sigma"),
-         gompertz = colnames(temp) <- c("p coef.", "pval.", "q coef.", "pval.",
-                                        "M size", "pval.", "sigma"),
-         gsgompertz = colnames(temp) <- c("a coef.", "pval.", "b coef.",
-                                         "pval.", "c coef", "pval.", "M size",
-                                         "pval.", "sigma"))
-  
-#   if (type == "bass"){
-#     colnames(temp) <- c("p coef.", "pval.", "q coef.", "pval.",
-#                         "M size", "pval.", "sigma")
-#   } else if (type == "gompertz"){
-#     colnames(temp) <- c("a coef.", "pval.", "b coef.",
-#                         "pval.", "M size", "pval.", "sigma")
-#   } else if (type == "gsgompertz"){
-#     colnames(temp) <- c("a coef.", "pval.", "b coef.",
-#                         "pval.", "c coef", "pval.", "M size", "pval.", "sigma")
-#   }
+         "bass" = colnames(temp) <- c("m coef.", "pval.",
+                                    "p coef.", "pval.",
+                                    "q coef.", "pval.",  "sigma"),
+         "gompertz" = colnames(temp) <- c("m coef.", "pval.",
+                                        "p coef.", "pval.",
+                                        "q coef.", "pval.",
+                                        "sigma"),
+         "gsgompertz" = colnames(temp) <- c("m coef", "pval.",
+                                          "a coef.", "pval.",
+                                          "b coef.", "pval.",
+                                          "c coef", "pval.", "sigma"),
+         "weibull" = colnames(temp) <- c("m coef.", "pval.",
+                                       "a coef.", "pval.",
+                                       "b coef.", "pval.",
+                                       "sigma"))
   print(temp)
   writeLines("")
   
@@ -196,13 +238,14 @@ print.seqdiffusion <- function(x,...){
 #'
 #' @return None. Function produces a plot.
 #' @author Oliver Schaer, \email{info@@oliverschaer.ch}, 
-#' @author Nikoloas Kourentzes, \email{nikoloas@@kourentzes.com}
+#' @author Nikolaos Kourentzes, \email{nikolaos@@kourentzes.com}
 #' @seealso \code{\link{seqdiffusion}}.
 #' @keywords internal
 #' @examples
 #'  fit <- seqdiffusion(tsIbm)
 #'  plot(fit)
 #'
+#' @importFrom grDevices colorRampPalette
 #' @export
 #' @method plot seqdiffusion
 plot.seqdiffusion <- function(x, cumulative = c(FALSE, TRUE),...){
@@ -211,33 +254,48 @@ plot.seqdiffusion <- function(x, cumulative = c(FALSE, TRUE),...){
   # cumulative, if TRUE plot cumulative adoption
   
   cumulative <- cumulative[1]
+  if ("cleanlead" %in% names(x$call)) {
+    cleanlead <- any(x$call$cleanlead == c("T", "TRUE"))
+  } else {
+    cleanlead <- TRUE
+  }
+  
   
   cmp <- c("#B2182B", "#EF8A62", "#67A9CF", "#2166AC")
-  k <- dim(x$x)[2]
-  cmp <- grDevices::colorRampPalette(cmp)(k)
-  N <- dim(x$x)[1]
+  k <- dim(x$y)[2]
+  cmp <- colorRampPalette(cmp)(k)
+  N <- dim(x$y)[1]
   
   if (cumulative == FALSE){
-    X <- x$x
+    Y <- x$y
     ll <- 2
   } else {
-    X <- apply(x$x, 2, cumsum)
+    Y <- apply(x$y, 2, cumsum)
     ll <- 1
   }
   
-  yy <- range(X)
+  yy <- range(Y, na.rm = T)
   yy <- yy + c(-1, 1)*0.04*diff(yy)
-  yy[1] <- max(0,yy[1])
+  yy[1] <- max(0, yy[1])
   
-  graphics::plot(NA, NA, xlim = c(1, N), ylim = yy,
+  plot(NA, NA, xlim = c(1, N), ylim = yy,
        xlab = "Period", ylab = "Adoption", main = x$type)
   for (i in 1:k){
-    x.temp <- X[, i]
-    x.temp <- cleanzero(x.temp)
-    n <- length(x.temp$x)
-    l <- x.temp$loc
+    y.temp <- Y[, i]
+    
+    if (cleanlead == TRUE) {
+      y.temp <- cleanzero(y.temp)
+      l <- y.temp$loc
+      y.temp <- y.temp$x
+    } else {
+      l <- 1
+    }
+    
+    y.temp <- cleanna(y.temp, silent = T)
+    l <- y.temp$locLead+l-1
+    n <- length(y.temp$x)
     xx <- l:(l+n-1)
-    graphics::points(xx, x.temp$x, col = "black", pch = 21, bg = cmp[i], cex = 0.7)
-    graphics::lines(xx, x$diffusion[[i]]$fit[,ll], col = cmp[i], lwd = 2)
+    points(xx, y.temp$x, col = "black", pch = 21, bg = cmp[i], cex = 0.7)
+    lines(xx, x$diffusion[[i]]$fit[, ll], col = cmp[i], lwd = 2)
   }
 }

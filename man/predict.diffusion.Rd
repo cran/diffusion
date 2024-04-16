@@ -19,7 +19,7 @@ Returns an object of class \code{diffusion}, which contains:
 \item \code{type} diffusion curve type used
 \item \code{call} calls function fitted
 \item \code{w} named vector of fitted parameters
-\item \code{x} actuals
+\item \code{y} actuals
 \item \code{fit} fitted values of model
 \item \code{frc} forecasts for future periods.
 \item \code{mse} insample Mean Squared Error
@@ -35,7 +35,7 @@ This function populates the matrix frc of the \code{diffusion} object used as in
 }
 \examples{
  fit <- diffusion(tsChicken[, 2])
- fti <- predict(fit,20)
+ fit <- predict(fit, 20)
  plot(fit)
 
 }

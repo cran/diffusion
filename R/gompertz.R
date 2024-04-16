@@ -14,29 +14,31 @@ gompertzCurve <- function(n, w){
   
   t <- 1:n
   # Cumulative
-  At <- w[3] * exp(-w[1] * exp(-w[2] * t))
-  # At <- w[3] * exp(-exp(-(w[1] + (w[2] *t))))
+  # At <- w[3] * exp(-w[1] * (exp(-w[2] * t)))
+  At <- w[1] * exp(-w[2] * (exp(-w[3] * t)))
   
   # Adoption
   at <- diff(c(0, At))
-  Y <- cbind(At, at)
-  colnames(Y) <- c("Cumulative Adoption", "Adoption")
+  x <- cbind(At, at)
+  colnames(x) <- c("Cumulative Adoption", "Adoption")
   
-  return(Y)
+  return(x)
 }
 
-gompertzInit <- function(x, l){
+gompertzInit <- function(y, loss, method, multisol, initpar, mscal){
   # Internal function: get initial values
   # get approximation of initial values using Jukic et al. 2004 approach adopted
-  # m to allow for x to be adoption per period
+  # m to allow for y to be adoption per period
   
+  # make sure leading 0s are removed
+  y <- cleanzero(y)$x
   
-  n <- length(x)
-  X <- cumsum(x)
+  n <- length(y)
+  Y <- cumsum(y)
   
   # get largest distance between t1 and t3 possible, t2 = (t1 + t3)/2
   t0 <- c(1, floor((1 + n)/2), n)
-  x0 <- X[t0]
+  x0 <- Y[t0]
   
   # make sure that all values are slightly different
   if(anyDuplicated(x0) > 0){
@@ -46,80 +48,24 @@ gompertzInit <- function(x, l){
   # m <- exp(log(x0[1]) - (((log(x0[2]) - log(x0[1]))^2) / (log(x0[3]) - (2*log(x0[2])) + log(x0[1]))))
   
   # calling bass estimates
-  what <- diffusionEstim(x, l, pvalreps = 0, type = "bass")$w
-  m <- what[3]
-
+  what <- diffusionEstim(y, loss, pvalreps = 0, type = "bass", method = method,
+                         multisol = multisol, initpar = initpar, mscal = mscal)$w
+  
+  m <- what[1]
+  
   a <- ((-(log(x0[2]) - log(x0[1]))^2)/(log(x0[3]) - (2 * log(x0[2])) + 
-        log(x0[1]))) * ((log(x0[2]) - log(x0[1]))/(log(x0[3]) -
-        log(x0[2])))^(2 * t0[1]/(t0[3] - t0[1]))
+                                          log(x0[1]))) * ((log(x0[2]) - log(x0[1]))/(log(x0[3]) -
+                                                                                       log(x0[2])))^(2 * t0[1]/(t0[3] - t0[1]))
   
   b <- (-2/(t0[3] - t0[1])) * log((log(x0[3]) -
                                      log(x0[2]))/(log(x0[2]) - log(x0[1])))
-  w <- c(a, b, m)
-  names(w) <- c("a", "b", "m")
+  w <- c(m, a, b)
+  names(w) <- c("m", "a", "b")
   
-#   a <- log(x0[1]) - (((log(x0[2]) - log(x0[1]))^2) / (log(x0[3]) - (2*log(x0[2])) + log(x0[1])))
-#   
-#   b <- ((-(log(x0[2]) - log(x0[1]))^2) / (log(x0[3]) - (2*log(x0[2])) + log(x0[1]))) *
-#     ((log(x0[2]) - log(x0[1])) / (log(x0[3]) - log(x0[2])))^(2*t0[1] / (t0[3]-t0[1]))
-
+  #   a <- log(x0[1]) - (((log(x0[2]) - log(x0[1]))^2) / (log(x0[3]) - (2*log(x0[2])) + log(x0[1])))
+  #   
+  #   b <- ((-(log(x0[2]) - log(x0[1]))^2) / (log(x0[3]) - (2*log(x0[2])) + log(x0[1]))) *
+  #     ((log(x0[2]) - log(x0[1])) / (log(x0[3]) - log(x0[2])))^(2*t0[1] / (t0[3]-t0[1]))
+  
   return(w)
-}
-
-gompertzCost <- function(w, x, l, w.idx = rep(TRUE, 3), prew = NULL, cumulative=c(TRUE,FALSE)){
-  # Internal function: cost function for numerical optimisation
-  # w, current parameters
-  # x, adoption per period
-  # l, the l-norm (1 is absolute errors, 2 is squared errors)
-  # w.idx, logical vector with three elements. Use FALSE to not estimate
-  # respective parameter
-  # prew, the w of the previous generation - this is used for sequential fitting
-  # cumulative, use cumulative adoption or not
-  
-  cumulative <- cumulative[1]
-  n <- length(x)
-  
-  # If some elements of w are not optimised, sort out vectors
-  w.all <- rep(0, 3)
-  w.all[w.idx] <- w
-  
-  # If sequential construct total parameters
-  if (is.null(prew)){
-    gompw <- w.all    
-  } else {
-    gompw <- w.all + prew
-  }
-  
-  fit <- gompertzCurve(n, gompw)
-  
-  if (cumulative == FALSE){
-    if (l == -1) {
-      se <- x - fit[,2]
-      se <- sum(se[se>0]) + sum(-se[se<0])
-    } else if (l == 1){
-      se <- sum(abs(x-fit[, 2]))
-    } else if (l == 2){
-      se <- sum((x-fit[, 2])^2)
-    } else {
-      se <- sum(abs(x-fit[, 2])^l)
-    }
-  } else {
-    if (l == -1) {
-      se <- cumsum(x) - fit[,1]
-      se <- sum(se[se>0]) + sum(-se[se<0])
-    } else if (l == 1){
-      se <- sum(abs(cumsum(x)-fit[, 1]))
-    } else if (l == 2){
-      se <- sum((cumsum(x)-fit[, 1])^2)
-    } else {
-      se <- sum(abs(cumsum(x)-fit[, 1])^l)
-    }
-  }
-  
-  # Ensure positive coefficients
-  if (any(gompw <= 0)){
-    se <- 10e200
-  }
-  
-  return(se)
 }

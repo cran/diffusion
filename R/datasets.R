@@ -19,23 +19,6 @@
 #' @references VGChartz
 NULL
 
-#' Time series: Broadcast subscribers
-#' 
-#' A dataset containing the broadcast subscribers to UK market 4Q 2011 to 2Q 2016.
-#' 
-#' @name tsBroadband
-#' @docType data
-#' @format A data frame with 51 observations and 4 variables
-#' \describe{
-#' \item{Time}{Quarters}
-#' \item{DSL}{Adoption of DSL subscribers}
-#' \item{Cablemodem}{Adoption of CableModem users}
-#' \item{FTTPb}{Adoption of FTTPb sales}
-#'   }
-#'   
-#' @references Telecoms Market Matrix
-NULL
-
 #' Time series: Stock of cars
 #' 
 #' A dataset containing the yearly stock of cars in the Netherlands (1965-1989).
@@ -86,12 +69,12 @@ NULL
 #' @references Bass, P.I. and Bass, F.M. 2004. IT Waves: Two Completed
 #'   Generational Diffusion Models. Working Paper Basseconomics, 1-33.
 #'   
-#' @source \url{https://goo.gl/VSEkgM}
+#' @source \url{https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=8bbf197bc39a27ccf44cfd5ed22b5db3da0c7bb2}
 NULL
 
 #' Time series: Safari Browser market share
 #' 
-#' A dataset containing the monthly market share of Safri browser generations
+#' A dataset containing the monthly market share of Safari browser generations
 #' from Safari 4.0 to Safari 10.
 #' 
 #' @name tsSafari
@@ -111,8 +94,25 @@ NULL
 #'   \item{Safari4.1}{Market share of Safari browser v 4.1}
 #'   \item{Safari4.0}{Market share of Safari browser v 4.0}}
 #'   
-#' @source \url{http://gs.statcounter.com/browser-version-market-share}
+#' @source \url{https://gs.statcounter.com/browser-version-market-share}
 NULL
+
+#' Time series: U.S. Merchant Marine conversion to metal
+#' 
+#' A dataset with conversion of U.S. Merchant Marine from wood to metal.
+#' 
+#' @name tsMetal
+#' @docType data
+#' @format A data frame with 17 observations and 2 variables
+#' \describe{
+#' \item{year}{Year}
+#' \item{substitution}{Conversion to metal}
+#'   }
+#'   
+#' @references Martino, J.P. 1993. Technological Forecasting for Decision
+#'   Making. 3rd edition. New York: McGraw-Hill.
+NULL
+
 
 #' Time series: Windows OS Platform Statistics
 #' 
@@ -133,4 +133,20 @@ NULL
 #'   interpolated
 #'   
 #' @source \url{https://www.w3schools.com/browsers/browsers_os.asp}
+NULL
+
+#' Time series: COVID-19 confirmed cases US
+#' 
+#' A dataset containing the number of confirmed COVID-19 cases in the US.
+#' 
+#' @name tsCovid
+#' @docType data
+#' @format A ts object with 107 days of observations
+#' \describe{
+#' \item{tsCovid}{Daily confirmed COVDID-19 cases}
+#'   }
+#'   
+#' @references COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University
+#' 
+#' @source \url{https://github.com/CSSEGISandData/COVID-19}
 NULL

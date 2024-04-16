@@ -4,7 +4,8 @@
 \name{tsSafari}
 \alias{tsSafari}
 \title{Time series: Safari Browser market share}
-\format{A data frame with 98 observations and 13 variables \describe{ 
+\format{
+A data frame with 98 observations and 13 variables \describe{ 
   \item{Date}{Log file date}
   \item{Safari10.0}{Usage of Windows 10} 
   \item{Safari9.1}{Market share of Safari browser v 10.0}
@@ -17,11 +18,12 @@
   \item{Safari5.1}{Market share of Safari browser v 5.1}
   \item{Safari5.0}{Market share of Safari browser v 5.0}
   \item{Safari4.1}{Market share of Safari browser v 4.1}
-  \item{Safari4.0}{Market share of Safari browser v 4.0}}}
+  \item{Safari4.0}{Market share of Safari browser v 4.0}}
+}
 \source{
-\url{http://gs.statcounter.com/browser-version-market-share}
+\url{https://gs.statcounter.com/browser-version-market-share}
 }
 \description{
-A dataset containing the monthly market share of Safri browser generations
+A dataset containing the monthly market share of Safari browser generations
 from Safari 4.0 to Safari 10.
 }
